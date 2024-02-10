@@ -2,117 +2,108 @@
 
 set -ex
 
-brew install \
-  git \
-  cmake \
-  gcc \
-  automake \
-  autoconf \
-  texinfo \
-  libtool \
-  libftdi \
-  libusb \
-  libusb-compat \
-  just \
-  wget \
-  pkg-config \
-  capstone
-brew install --cask gcc-arm-embedded
+function install_dependencies {
+  case "$(uname -s)" in
+    Darwin)
+      install_dependencies_macos
+      ;;
+    Linux)
+      install_dependencies_linux
+      ;;
+    *)
+      echo "Unsupported OS: $(uname -s)"
+      exit 1
+      ;;
+  esac
+}
+
+function install_dependencies_macos {
+  brew install \
+    git \
+    cmake \
+    gcc \
+    automake \
+    autoconf \
+    texinfo \
+    libtool \
+    libftdi \
+    libusb \
+    libusb-compat \
+    just \
+    wget \
+    pkg-config \
+    capstone
+
+  brew install --cask gcc-arm-embedded
+}
+
+function download_libraries {
+  for library in pico-sdk pico-examples pico-extras pico-playground debugprobe picotool openocd; do
+    [ ! -d "$library" ] && git clone "https://github.com/raspberrypi/$library"
+    cd "$library"
+    git pull
+    git submodule update --init
+    cd ..
+  done
+}
+
+function build_images {
+  mkdir -p images
+
+  cd debugprobe
+  mkdir -p build
+  cd build
+  cmake ..
+  make
+  cd ../..
+  cp debugprobe/build/debugprobe.uf2 images/debugprobe.uf2
+
+  cd picotool
+  mkdir -p build
+  cd build
+  cmake ..
+  make
+  cd ../..
+  cp picotool/build/picotool "$HOME/.local/bin/picotool"
+
+  cd pico-examples
+  mkdir -p build
+  cd build
+  cmake ..
+  cd flash
+  make
+  cd ../../..
+  cp pico-examples/build/flash/nuke/flash_nuke.uf2 images/flash_nuke.uf2
+
+  cd openocd
+  export PATH="$(brew --prefix)/opt/texinfo/bin:$PATH"
+  ./bootstrap
+  CAPSTONE_CFLAGS="-I$(brew --prefix)/include" ./configure --enable-picoprobe --disable-presto --disable-werror --disable-openjtag
+  make -j4
+  make install
+  cd ..
+
+  wget https://micropython.org/resources/firmware/RPI_PICO-20231005-v1.21.0.uf2 -O images/RPI_PICO-20231005-v1.21.0.uf2
+
+  wget https://github.com/kaluma-project/kaluma/releases/download/1.0.0/kaluma-rp2-pico-1.0.0.uf2 -O images/kaluma-rp2-pico-1.0.0.uf2
+}
+
+function set_sdk_path {
+  sed -i '' '/export PICO_SDK_PATH=/d' "$HOME/.zshrc"
+  echo "export PICO_SDK_PATH=\"$HOME/.pico/pico-sdk\"" >> "$HOME/.zshrc"
+}
+
+install_dependencies
 
 mkdir -p "$HOME/.pico"
-
 cd "$HOME/.pico"
 
-[ ! -d pico-sdk ] && git clone https://github.com/raspberrypi/pico-sdk
-cd pico-sdk
-git pull
-git submodule update --init
-cd ..
-
-[ ! -d pico-examples ] && git clone https://github.com/raspberrypi/pico-examples
-cd pico-examples
-git pull
-git submodule update --init
-cd ..
-
-[ ! -d pico-extras ] && git clone https://github.com/raspberrypi/pico-extras
-cd pico-extras
-git pull
-git submodule update --init
-cd ..
-
-[ ! -d pico-playground ] && git clone https://github.com/raspberrypi/pico-playground
-cd pico-playground
-git pull
-git submodule update --init
-cd ..
-
-[ ! -d picoprobe ] && git clone https://github.com/raspberrypi/picoprobe
-cd picoprobe
-git pull
-git submodule update --init
-cd ..
-
-[ ! -d picotool ] && git clone https://github.com/raspberrypi/picotool
-cd picotool
-git pull
-git submodule update --init
-cd ..
-
-[ ! -d openocd ] && git clone https://github.com/raspberrypi/openocd --branch picoprobe --depth=1
-cd openocd
-git pull
-git submodule update --init
-cd ..
+download_libraries
 
 export PICO_SDK_PATH="$HOME/.pico/pico-sdk"
 
-mkdir -p images
-
-cd picoprobe
-mkdir -p build
-cd build
-cmake ..
-make
-cd ..
-cd ..
-cp picoprobe/build/picoprobe.uf2 images/picoprobe.uf2
-
-cd picotool
-mkdir -p build
-cd build
-cmake ..
-make
-cd ..
-cd ..
-cp picotool/build/picotool "$HOME/.local/bin/picotool"
-
-cd pico-examples
-mkdir -p build
-cd build
-cmake ..
-cd flash
-make
-cd ..
-cd ..
-cd ..
-cp pico-examples/build/flash/nuke/flash_nuke.uf2 images/flash_nuke.uf2
-
-cd openocd
-export PATH="$(brew --prefix)/opt/texinfo/bin:$PATH"
-./bootstrap
-CAPSTONE_CFLAGS="-I$(brew --prefix)/include" ./configure --enable-picoprobe --disable-presto --disable-werror --disable-openjtag
-make -j4
-make install
-cd ..
-
-wget https://micropython.org/resources/firmware/RPI_PICO-20231005-v1.21.0.uf2 -O images/RPI_PICO-20231005-v1.21.0.uf2
-
-wget https://github.com/kaluma-project/kaluma/releases/download/1.0.0/kaluma-rp2-pico-1.0.0.uf2 -O images/kaluma-rp2-pico-1.0.0.uf2
-
-sed -i '' '/export PICO_SDK_PATH=/d' "$HOME/.zshrc"
-
-echo "export PICO_SDK_PATH=\"${PICO_SDK_PATH}\"" >> "$HOME/.zshrc"
+build_images
+set_sdk_path
 
 cat > "$HOME/.local/bin/open-pico-images" <<'EOF'
 #!/bin/sh
@@ -144,19 +135,23 @@ mkdir "$PROJECT_NAME"
 cd "$PROJECT_NAME"
 
 cp "$HOME/.pico/pico-sdk/external/pico_sdk_import.cmake" ./
+cp "$HOME/.pico/pico-sdk/external/pico_extras_import.cmake" ./
 
 cat > CMakeLists.txt <<CMAKE
 cmake_minimum_required(VERSION 3.12)
 
 include(pico_sdk_import.cmake)
+# include(pico_extras_import.cmake)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 project(${PROJECT_NAME} VERSION 1.0.0)
 
 add_executable(${PROJECT_NAME} src/main.c)
 
-target_link_libraries(${PROJECT_NAME} pico_stdlib)
+target_link_libraries(${PROJECT_NAME} PRIVATE pico_stdlib)
 
 pico_sdk_init()
 

@@ -2,13 +2,18 @@
 
 set -ex
 
-function install_dependencies {
+PREFIX=''
+
+install_dependencies() {
   case "$(uname -s)" in
     Darwin)
       install_dependencies_macos
+      PREFIX=$(brew --prefix)
+      export PATH="$PREFIX/opt/texinfo/bin:$PATH"
       ;;
     Linux)
       install_dependencies_linux
+      PREFIX='/usr'
       ;;
     *)
       echo "Unsupported OS: $(uname -s)"
@@ -17,7 +22,7 @@ function install_dependencies {
   esac
 }
 
-function install_dependencies_macos {
+install_dependencies_macos() {
   brew install \
     git \
     cmake \
@@ -37,7 +42,32 @@ function install_dependencies_macos {
   brew install --cask gcc-arm-embedded
 }
 
-function download_libraries {
+install_dependencies_linux() {
+  wget -qO - 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg --dearmor | sudo tee /usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg 1> /dev/null
+  echo "deb [arch=all,$(dpkg --print-architecture) signed-by=/usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg] https://proget.makedeb.org prebuilt-mpr $(lsb_release -cs)" | sudo tee /etc/apt/sources.list.d/prebuilt-mpr.list
+  sudo apt-get update
+
+
+  sudo apt-get install -y \
+    git \
+    cmake \
+    gcc \
+    automake \
+    autoconf \
+    texinfo \
+    libtool \
+    libftdi-dev \
+    libusb-1.0-0-dev \
+    libhidapi-dev \
+    just \
+    wget \
+    pkg-config \
+    libcapstone-dev
+
+  sudo apt-get install -y gcc-arm-none-eabi
+}
+
+download_libraries() {
   for library in pico-sdk pico-examples pico-extras pico-playground debugprobe picotool openocd; do
     [ ! -d "$library" ] && git clone "https://github.com/raspberrypi/$library"
     cd "$library"
@@ -47,16 +77,20 @@ function download_libraries {
   done
 }
 
-function build_images {
+build_images() {
   mkdir -p images
+
+  cd pico-sdk
+  sed -i 's/#define PICO_FLASH_SPI_CLKDIV 2/#define PICO_FLASH_SPI_CLKDIV 4/' "src/boards/include/boards/waveshare_rp2040_zero.h"
+  cd ..
 
   cd debugprobe
   mkdir -p build
   cd build
-  cmake ..
+  cmake -DDEBUG_ON_PICO=ON ..
   make
   cd ../..
-  cp debugprobe/build/debugprobe.uf2 images/debugprobe.uf2
+  cp debugprobe/build/debugprobe_on_pico.uf2 images/debugprobe_on_pico.uf2
 
   cd picotool
   mkdir -p build
@@ -76,11 +110,10 @@ function build_images {
   cp pico-examples/build/flash/nuke/flash_nuke.uf2 images/flash_nuke.uf2
 
   cd openocd
-  export PATH="$(brew --prefix)/opt/texinfo/bin:$PATH"
-  ./bootstrap
-  CAPSTONE_CFLAGS="-I$(brew --prefix)/include" ./configure --enable-picoprobe --disable-presto --disable-werror --disable-openjtag
+    ./bootstrap
+  CAPSTONE_CFLAGS="-I$PREFIX/include/capstone" ./configure --enable-picoprobe --enable-cmsis-dap --disable-presto --disable-werror --disable-openjtag
   make -j4
-  make install
+  sudo make install
   cd ..
 
   wget https://micropython.org/resources/firmware/RPI_PICO-20231005-v1.21.0.uf2 -O images/RPI_PICO-20231005-v1.21.0.uf2
@@ -88,8 +121,8 @@ function build_images {
   wget https://github.com/kaluma-project/kaluma/releases/download/1.0.0/kaluma-rp2-pico-1.0.0.uf2 -O images/kaluma-rp2-pico-1.0.0.uf2
 }
 
-function set_sdk_path {
-  sed -i '' '/export PICO_SDK_PATH=/d' "$HOME/.zshrc"
+set_sdk_path() {
+  sed -i '/export PICO_SDK_PATH=/d' "$HOME/.zshrc"
   echo "export PICO_SDK_PATH=\"$HOME/.pico/pico-sdk\"" >> "$HOME/.zshrc"
 }
 
@@ -135,7 +168,7 @@ mkdir "$PROJECT_NAME"
 cd "$PROJECT_NAME"
 
 cp "$HOME/.pico/pico-sdk/external/pico_sdk_import.cmake" ./
-cp "$HOME/.pico/pico-sdk/external/pico_extras_import.cmake" ./
+cp "$HOME/.pico/pico-extras/external/pico_extras_import.cmake" ./
 
 cat > CMakeLists.txt <<CMAKE
 cmake_minimum_required(VERSION 3.12)
@@ -209,32 +242,10 @@ GITIGNORE
 
 mkdir .vscode
 
-cat > .vscode/c_cpp_properties.json <<'JSON'
-{
-  "configurations": [
-    {
-      "name": "Pico on MacOS",
-      "includePath": [
-        "${workspaceFolder}/**"
-      ],
-      "defines": [],
-      "macFrameworkPath": [
-        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
-      ],
-      "compilerPath": "/usr/bin/clang",
-      "cStandard": "c11",
-      "cppStandard": "c++17",
-      "intelliSenseMode": "macos-clang-arm64",
-      "compileCommands": "${workspaceFolder}/build/compile_commands.json"
-    }
-  ],
-  "version": 4
-}
-JSON
-
 cat > .vscode/settings.json <<'JSON'
 {
-  "cmake.configureOnOpen": true
+  "cmake.configureOnOpen": true,
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
 }
 JSON
 

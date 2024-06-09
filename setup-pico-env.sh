@@ -22,6 +22,21 @@ install_dependencies() {
   esac
 }
 
+cross_sed() {
+  case "$(uname -s)" in
+    Darwin)
+      sed -i '' "$@"
+      ;;
+    Linux)
+      sed -i "$@"
+      ;;
+    *)
+      echo "Unsupported OS: $(uname -s)"
+      exit 1
+      ;;
+  esac
+}
+
 install_dependencies_macos() {
   brew install \
     git \
@@ -37,7 +52,8 @@ install_dependencies_macos() {
     just \
     wget \
     pkg-config \
-    capstone
+    capstone \
+    hidapi
 
   brew install --cask gcc-arm-embedded
 }
@@ -81,7 +97,7 @@ build_images() {
   mkdir -p images
 
   cd pico-sdk
-  sed -i 's/#define PICO_FLASH_SPI_CLKDIV 2/#define PICO_FLASH_SPI_CLKDIV 4/' "src/boards/include/boards/waveshare_rp2040_zero.h"
+  cross_sed 's/#define PICO_FLASH_SPI_CLKDIV 2/#define PICO_FLASH_SPI_CLKDIV 4/' "src/boards/include/boards/waveshare_rp2040_zero.h"
   cd ..
 
   cd debugprobe
@@ -122,7 +138,7 @@ build_images() {
 }
 
 set_sdk_path() {
-  sed -i '/export PICO_SDK_PATH=/d' "$HOME/.zshrc"
+  cross_sed '/export PICO_SDK_PATH=/d' "$HOME/.zshrc"
   echo "export PICO_SDK_PATH=\"$HOME/.pico/pico-sdk\"" >> "$HOME/.zshrc"
 }
 

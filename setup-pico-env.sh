@@ -187,22 +187,22 @@ cp "$HOME/.pico/pico-sdk/external/pico_sdk_import.cmake" ./
 cp "$HOME/.pico/pico-extras/external/pico_extras_import.cmake" ./
 
 cat > CMakeLists.txt <<CMAKE
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.27)
 
 include(pico_sdk_import.cmake)
 # include(pico_extras_import.cmake)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 23)
 set(CMAKE_CXX_STANDARD 17)
 
 project(${PROJECT_NAME} VERSION 1.0.0)
 
+pico_sdk_init()
+
 add_executable(${PROJECT_NAME} src/main.c)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE pico_stdlib)
-
-pico_sdk_init()
 
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
 pico_enable_stdio_uart(${PROJECT_NAME} 1)
@@ -264,6 +264,7 @@ mkdir .vscode
 cat > .vscode/settings.json <<'JSON'
 {
   "cmake.configureOnOpen": true,
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
   "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
 }
 JSON

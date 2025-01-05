@@ -6,4 +6,4 @@ wget -qO - https://raw.githubusercontent.com/tassoevan/setup-pico-env/main/setup
 
 This script will install all the dependencies to build and flash code to a
 Raspberry Pi Pico. It will also install the `pico-sdk` and `pico-examples`
-repositories under the `~/pico` directory.
+repositories under the `~/.pico` directory.

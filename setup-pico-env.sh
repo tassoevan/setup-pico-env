@@ -100,14 +100,6 @@ build_images() {
   cross_sed 's/#define PICO_FLASH_SPI_CLKDIV 2/#define PICO_FLASH_SPI_CLKDIV 4/' "src/boards/include/boards/waveshare_rp2040_zero.h"
   cd ..
 
-  cd debugprobe
-  mkdir -p build
-  cd build
-  cmake -DDEBUG_ON_PICO=ON ..
-  make
-  cd ../..
-  cp debugprobe/build/debugprobe_on_pico.uf2 images/debugprobe_on_pico.uf2
-
   cd picotool
   mkdir -p build
   cd build
@@ -115,6 +107,14 @@ build_images() {
   make
   cd ../..
   cp picotool/build/picotool "$HOME/.local/bin/picotool"
+
+  cd debugprobe
+  mkdir -p build
+  cd build
+  cmake -DDEBUG_ON_PICO=ON ..
+  make
+  cd ../..
+  cp debugprobe/build/debugprobe_on_pico.uf2 images/debugprobe_on_pico.uf2
 
   cd pico-examples
   mkdir -p build

@@ -189,6 +189,11 @@ cp "$HOME/.pico/pico-extras/external/pico_extras_import.cmake" ./
 cat > CMakeLists.txt <<CMAKE
 cmake_minimum_required(VERSION 3.27)
 
+# set(PICO_BOARD waveshare_rp2040_zero)
+# set(PICO_BOARD yd_rp2040)
+
+list(APPEND PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/src/boards)
+
 include(pico_sdk_import.cmake)
 # include(pico_extras_import.cmake)
 
@@ -230,6 +235,20 @@ int main() {
     sleep_ms(1000);
   }
 }
+
+C
+
+mkdir src/boards
+cat > src/boards/yd_rp2040.c <<C
+#ifndef _BOARDS_YD_RP2040_H
+#define _BOARDS_YD_RP2040_H
+
+#include "boards/pico.h"
+
+#define PICO_DEFAULT_WS2812_PIN     23
+#define PICO_USR_KEY_PIN            24
+
+#endif // _BOARDS_YD_RP2040_H
 
 C
 
